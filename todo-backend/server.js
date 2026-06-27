@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 dotenv.config();
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
