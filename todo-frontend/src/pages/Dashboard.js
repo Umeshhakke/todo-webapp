@@ -1,30 +1,29 @@
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
-const Dashboard= () =>{
-    const {user, logout} = useAuth();
+const Dashboard = () => {
+    const { user, logout } = useAuth();
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [newTitle, setNewTitle] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [newDueDate, setNewDueDate] = useState('');
+    const [newTime, setNewTime] = useState(''); 
     const [newPriority, setNewPriority] = useState('medium');
     const [error, setError] = useState('');
-    const [notificationStatus, setNotificationStatus] = useState('Checking...');
     const [isSubscribed, setIsSubscribed] = useState(false);
-    const [newTime, setNewTime] = useState(''); // 👈 ADD THIS
 
-    useEffect(()=>{
+    useEffect(() => {
         fetchTasks();
-    },[]);
+    }, []);
 
-    const fetchTasks = async () =>{
-        try{
+    const fetchTasks = async () => {
+        try {
             const response = await api.get('/tasks');
             setTasks(response.data);
             setLoading(false);
-        }catch(err){
+        } catch (err) {
             setError('Failed to fetch tasks');
             setLoading(false);
         }
@@ -34,7 +33,6 @@ const Dashboard= () =>{
         e.preventDefault();
         if (!newTitle.trim()) return;
 
-        // ✅ Combine date and time into one ISO string
         let dueDateTime = null;
         if (newDueDate && newTime) {
             dueDateTime = new Date(`${newDueDate}T${newTime}:00`).toISOString();
@@ -44,95 +42,96 @@ const Dashboard= () =>{
             const response = await api.post('/tasks', {
                 title: newTitle,
                 description: newDescription,
-                dueDate: dueDateTime, // 👈 Send combined date+time
+                dueDate: dueDateTime,
                 priority: newPriority,
             });
             setTasks([response.data, ...tasks]);
             setNewTitle('');
             setNewDescription('');
             setNewDueDate('');
-            setNewTime(''); // 👈 Reset time field
+            setNewTime('');
             setNewPriority('medium');
             setError('');
         } catch (err) {
             setError('Failed to add task');
         }
     };
-    const toggleComplete = async (taskId, currentStatus) =>{
-        try{
-            const response = await api.put(`/tasks/${taskId}`,{
+
+    const toggleComplete = async (taskId, currentStatus) => {
+        try {
+            const response = await api.put(`/tasks/${taskId}`, {
                 completed: !currentStatus,
             });
-            setTasks(tasks.mao(task=> task._id === taskId ? response.data : task));
-        }catch(err){
+            // ✅ FIXED: 'map' instead of 'mao'
+            setTasks(tasks.map(task => task._id === taskId ? response.data : task));
+        } catch (err) {
             setError('Failed to update task');
         }
     };
-    const deleteTask = async (taskId)=>{
-        if(!window.confirm('Are you sure you want to delete this task?'))return;
-        try{
+
+    const deleteTask = async (taskId) => {
+        if (!window.confirm('Are you sure you want to delete this task?')) return;
+        try {
             await api.delete(`/tasks/${taskId}`);
             setTasks(tasks.filter(task => task._id !== taskId));
-        }catch(err){
+        } catch (err) {
             setError('Failed to delete task');
         }
     };
+
     const handleLogout = () => {
         logout();
     };
 
-    if (loading) return <div className="text-center mt-10 text-gray-600">Loading tasks...</div>;
+    // Get tasks due within the next 24 hours
+    const getUpcomingTasks = () => {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        return tasks.filter(task => {
+            if (!task.dueDate || task.completed) return false;
+            const due = new Date(task.dueDate);
+            return due >= now && due <= tomorrow;
+        });
+    };
+    const upcomingTasks = getUpcomingTasks();
 
-
-    // Function to enable push notifications
-    // ✅ FIXED enableNotifications function
+    // Enable Notifications Logic
     const enableNotifications = async () => {
         try {
-            // 1. Check if browser supports notifications
             if (!('Notification' in window)) {
                 alert('This browser does not support notifications.');
                 return;
             }
 
-            // 2. Ask for permission
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
                 alert('Permission denied. You will not receive notifications.');
-                setNotificationStatus('Blocked');
                 return;
             }
 
-            // 3. Get the service worker registration
             const registration = await navigator.serviceWorker.ready;
-
-            // 4. Fetch VAPID public key from backend
-            // 👇 RENAMED this to 'vapidResponse' to avoid conflict
             const vapidResponse = await api.get('/vapid-public-key');
             const vapidPublicKey = vapidResponse.data.publicKey;
 
-            // 5. Subscribe to push
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
             });
 
-            console.log('✅ Push subscription:', subscription);
-
-            // 6. Send subscription to backend
-            // 👇 This stays as 'response' – it's unique now
             const response = await api.post('/subscribe', { subscription });
             if (response.status === 200 || response.status === 201) {
                 setIsSubscribed(true);
-                setNotificationStatus('Enabled');
                 alert('🎉 Notifications enabled successfully! You will get reminders for upcoming tasks.');
             }
         } catch (error) {
             console.error('❌ Notification setup failed:', error);
-            setNotificationStatus('Failed');
             alert('Failed to enable notifications. See console for details.');
         }
     };
-    // Helper function to convert VAPID key to Uint8Array (required by browser)
+
+    // Helper function to convert VAPID key to Uint8Array
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -144,13 +143,14 @@ const Dashboard= () =>{
         return outputArray;
     }
 
+    if (loading) return <div className="text-center mt-10 text-gray-600">Loading tasks...</div>;
+
     return (
         <div className="min-h-screen bg-gray-100 p-6">
             <div className="max-w-3xl mx-auto">
-                {/* Header with Logout */}
+                {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-800">My Tasks</h1>
-                    
                     <div className="flex items-center gap-4">
                         <button
                             onClick={enableNotifications}
@@ -172,8 +172,28 @@ const Dashboard= () =>{
                         </button>
                     </div>
                 </div>
+
                 {/* Error message */}
                 {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
+                {/* ⏰ Upcoming Tasks Warning Banner (This shows tasks due in next 24 hours) */}
+                {upcomingTasks.length > 0 && (
+                    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow-sm" role="alert">
+                        <p className="font-bold">⏰ Reminder: {upcomingTasks.length} task{upcomingTasks.length > 1 ? 's are' : ' is'} due soon!</p>
+                        <ul className="list-disc list-inside text-sm mt-1">
+                            {upcomingTasks.map(task => (
+                                <li key={task._id}>
+                                    <strong>{task.title}</strong> - Due: {new Date(task.dueDate).toLocaleString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* Add Task Form */}
                 <div className="bg-white p-4 rounded-lg shadow-md mb-6">
@@ -207,7 +227,7 @@ const Dashboard= () =>{
                                 value={newTime}
                                 onChange={(e) => setNewTime(e.target.value)}
                                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                                step="60" // 👈 Optional: restricts to whole minutes (no seconds)
+                                step="60"
                             />
                             <select
                                 value={newPriority}
