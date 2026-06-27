@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 dotenv.config();
-const jwt = require('jsonwebtoken');
-const User = require('./models/User');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -32,45 +30,7 @@ app.get('/api/test', (req, res) => {
 app.get('/api/vapid-public-key', (req, res) => {
     res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
-// 🧪 TEST ROUTE: Manually trigger a notification for the logged-in user
-app.get('/api/test-notification', async (req, res) => {
-    try {
-        const token = req.headers.authorization?.split(' ')[1];
-        if (!token) return res.status(401).json({ message: 'No token' });
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id);
-        if (!user) return res.status(401).json({ message: 'User not found' });
-
-        const subscription = await Subscription.findOne({ user: user._id });
-        if (!subscription) {
-            return res.status(404).json({ message: 'No subscription found for this user' });
-        }
-
-        const webpush = require('web-push');
-        webpush.setVapidDetails(
-            `mailto:${process.env.VAPID_EMAIL}`,
-            process.env.VAPID_PUBLIC_KEY,
-            process.env.VAPID_PRIVATE_KEY
-        );
-
-        await webpush.sendNotification(
-            {
-                endpoint: subscription.endpoint,
-                keys: {
-                    p256dh: subscription.keys.p256dh,
-                    auth: subscription.keys.auth,
-                },
-            },
-            JSON.stringify({ title: '🧪 Test Notification', body: 'If you see this, push works!' })
-        );
-
-        res.json({ message: 'Test notification sent!' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: error.message });
-    }
-});
 
 // MongoDB Connection
 const connectDB = async () => {
