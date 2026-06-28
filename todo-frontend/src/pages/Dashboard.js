@@ -18,6 +18,42 @@ const Dashboard = () => {
         fetchTasks();
     }, []);
 
+
+
+    // ✅ NEW: Check if already subscribed when component mounts
+    useEffect(() => {
+        const checkExistingSubscription = async () => {
+            try {
+                // 1. Check if browser supports notifications and service workers
+                if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+                    return;
+                }
+
+                // 2. If permission is not granted, don't bother checking
+                if (Notification.permission !== 'granted') {
+                    return;
+                }
+
+                // 3. Get the service worker registration
+                const registration = await navigator.serviceWorker.ready;
+
+                // 4. Check if there's an existing push subscription
+                const existingSubscription = await registration.pushManager.getSubscription();
+
+                if (existingSubscription) {
+                    console.log('✅ Existing push subscription found:', existingSubscription);
+                    setIsSubscribed(true);
+                } else {
+                    console.log('🔕 No existing push subscription found.');
+                }
+            } catch (error) {
+                console.error('❌ Error checking subscription status:', error);
+            }
+        };
+
+        checkExistingSubscription();
+    }, []); // Empty dependency array = runs only once on mount
+
     const fetchTasks = async () => {
         try {
             const response = await api.get('/tasks');

@@ -1,4 +1,13 @@
-// This service worker handles PUSH events
+// ✅ Force the service worker to install and activate immediately
+self.addEventListener('install', function(event) {
+    event.waitUntil(self.skipWaiting()); // Skip the waiting phase
+});
+
+self.addEventListener('activate', function(event) {
+    event.waitUntil(self.clients.claim()); // Take control of all open tabs
+});
+
+// Your existing Push event listener
 self.addEventListener('push', function (event) {
     console.log('📨 Push event received:', event);
 
@@ -14,7 +23,7 @@ self.addEventListener('push', function (event) {
 
     const options = {
         body: data.body,
-        icon: '/logo192.png', // Make sure you have a logo in public/
+        icon: '/logo192.png',
         badge: '/favicon.ico',
         vibrate: [200, 100, 200],
         data: {
@@ -34,7 +43,7 @@ self.addEventListener('push', function (event) {
     );
 });
 
-// Handle notification click (opens the app)
+// Handle notification click
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
 
